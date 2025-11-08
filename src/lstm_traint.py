@@ -87,7 +87,7 @@ def evaluate(model, loader, tokenizer):
 def train_model(model, train_loader, val_loader, tokenizer):
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.002)
-    for epoch in range(2):
+    for epoch in range(10):
         model.train()
         train_loss = 0
         for x_batch, y_batch in tqdm(train_loader):
