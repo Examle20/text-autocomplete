@@ -30,10 +30,11 @@ class TextDataset(Dataset):
         self.samples = []
         for line in texts:
             token_ids = tokenizer.encode(line, add_special_tokens=False, max_length=512, truncation=True)
-            for i in range(1, len(token_ids) - 1):
-                input = token_ids[: i + 1]
-                target = token_ids[i + 1:]
-                self.samples.append((input, target))
+            if len(token_ids) < 2:
+                continue
+            x = token_ids[:-1]
+            y = token_ids[1:]
+            self.samples.append((x, y))
 
     def __len__(self):
         return len(self.samples)
@@ -43,20 +44,10 @@ class TextDataset(Dataset):
         x, y = self.samples[idx]
         return torch.tensor(x), torch.tensor(y)
 
-def collate_fn(batch):
-    lengths = torch.tensor([len(item['text']) for item in batch], dtype=torch.long)
-
-    sorted_indices = torch.argsort(lengths, descending=True)
-    batch = [batch[i] for i in sorted_indices]
-    lengths = lengths[sorted_indices]
-
-    texts = [item['text'] for item in batch]
-    print(texts)
-    padded_texts = pad_sequence(texts, batch_first=True, padding_value=0)
-    masks = (padded_texts != 0).long()
-
-    return {
-        'texts': padded_texts,
-        'masks': masks,
-        'lengths': lengths
-    }    
+def collate_fn(batch, pad_id=0):
+    xs, ys = zip(*batch)
+    xs = [torch.tensor(x, dtype=torch.long) for x in xs]
+    ys = [torch.tensor(y, dtype=torch.long) for y in ys]
+    X = pad_sequence(xs, batch_first=True, padding_value=pad_id)
+    Y = pad_sequence(ys, batch_first=True, padding_value=-100)
+    return X, Y
