@@ -29,7 +29,7 @@ class TextDataset(Dataset):
     def __init__(self, texts, tokenizer):
         self.samples = []
         for line in texts:
-            token_ids = tokenizer.encode(line, add_special_tokens=False, max_length=512, truncation=True)
+            token_ids = tokenizer.encode(line, add_special_tokens=False, max_length=64, truncation=True)
             if len(token_ids) < 2:
                 continue
             x = token_ids[:-1]
@@ -46,8 +46,8 @@ class TextDataset(Dataset):
 
 def collate_fn(batch, pad_id=0):
     xs, ys = zip(*batch)
-    xs = [torch.tensor(x, dtype=torch.long) for x in xs]
-    ys = [torch.tensor(y, dtype=torch.long) for y in ys]
     X = pad_sequence(xs, batch_first=True, padding_value=pad_id)
     Y = pad_sequence(ys, batch_first=True, padding_value=-100)
-    return X, Y
+    attn_mask = (X != pad_id).long()
+    lengths = attn_mask.sum(dim=1)
+    return X, Y, attn_mask, lengths
