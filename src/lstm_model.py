@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 class LSTMAutoCopleteText(nn.Module):
     def __init__(
@@ -8,42 +7,48 @@ class LSTMAutoCopleteText(nn.Module):
         vocab_size,
         hidden_dim=128,
         emb_dim=128,
-        num_layers=1,
-        pad_id=0,
-        dropout=0.0
+        num_layers=2,
+        dropout=0.2
     ):
         super().__init__()
-        self.pad_id = pad_id
-        self.embedding = nn.Embedding(vocab_size, emb_dim, padding_idx=pad_id)
+        self.embedding = nn.Embedding(vocab_size, emb_dim)
         self.rnn = nn.LSTM(
             input_size=emb_dim,
             hidden_size=hidden_dim,
             num_layers=num_layers,
-            dropout=0.0 if num_layers == 1 else dropout,
-            batch_first=True,
+            dropout=dropout,
+            batch_first=True
         )
-        self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
+        self.dropout = nn.Dropout(dropout)
+        self.vocab_size = vocab_size
+        self.hidden_dim = hidden_dim
         self.fc = nn.Linear(hidden_dim, vocab_size, bias=True)
         self.fc.weight = self.embedding.weight
 
-    def forward(self, x, lengths=None, hidden=None, return_hidden=False):
+    def forward(self, x, hidden=None):
         emb = self.embedding(x)
-        if lengths is not None:
-            packed = pack_padded_sequence(emb, lengths.cpu(), batch_first=True, enforce_sorted=False)
-            out_packed, hidden = self.rnn(packed, hidden)
-            out, _ = pad_packed_sequence(out_packed, batch_first=True, total_length=x.size(1))
-        else:
-            out, hidden = self.rnn(emb, hidden)
+        out, hidden = self.rnn(emb, hidden)
         out = self.dropout(out)
         logits = self.fc(out)
-
-        if return_hidden:
-            return logits, hidden
-        return logits
-    
-    @torch.no_grad()
-    def step(self, last_token_ids, hidden=None):
-        emb = self.embedding(last_token_ids)
-        out, hidden = self.rnn(emb, hidden)
-        logits = self.fc(out)
         return logits, hidden
+    
+    def generate(self, tokenizer, prompt, max_length=20, device='cpu'):
+        self.eval()
+        self.to(device)
+        with torch.no_grad():
+            tokens = tokenizer.encode(prompt.lower(), return_tensors='pt').to(device)
+            generated = tokens.clone()
+           
+            logits, hidden = self.forward(tokens, hidden)
+
+            for _ in range(max_length - tokens.size(1)):
+                last_token = generated[:, -1:].to(device)
+                logits, hidden = self.forward(last_token, hidden)
+                next_token = torch.argmax(logits[:, -1, :], dim=-1, keepdim=True)
+                generated = torch.cat([generated, next_token], dim=1)
+                
+                eos_id = getattr(tokenizer, "eos_token_id", None)
+                if eos_id is not None and next_token.item() == eos_id:
+                    break
+
+            return tokenizer.decode(generated[0].tolist(), skip_special_tokens=True)

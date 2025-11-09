@@ -48,6 +48,5 @@ def collate_fn(batch, pad_id=0):
     xs, ys = zip(*batch)
     X = pad_sequence(xs, batch_first=True, padding_value=pad_id)
     Y = pad_sequence(ys, batch_first=True, padding_value=-100)
-    attn_mask = (X != pad_id).long()
-    lengths = attn_mask.sum(dim=1)
-    return X, Y, attn_mask, lengths
+    
+    return X, Y
