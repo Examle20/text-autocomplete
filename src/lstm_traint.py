@@ -65,7 +65,6 @@ def evaluate(model, loader, pad_id=0):
     return val_loss, val_acc
 
 def train_model(model, train_loader, val_loader, tokenizer, epochs=6, lr=1e-3, pad_id=0):
-    print(device)
     model.to(device)
     criterion = torch.nn.CrossEntropyLoss(ignore_index=pad_id)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
