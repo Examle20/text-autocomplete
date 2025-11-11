@@ -2,14 +2,9 @@ import torch
 from tqdm.auto import tqdm
 import evaluate as eval_r
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
 rouge_metric = eval_r.load("rouge")
 
 def evaluate_rouge(model, loader, tokenizer, pad_id=0, device=None, max_batches=None):
-    import torch
-    device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
     preds, refs = [], []
     with torch.no_grad():
@@ -24,7 +19,6 @@ def evaluate_rouge(model, loader, tokenizer, pad_id=0, device=None, max_batches=
                 k = max(1, int(0.75 * seq.numel()))
                 prefix_ids = seq[:k].tolist()
                 target_ids = seq[k:].tolist()
-
                 prompt = tokenizer.decode(prefix_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
                 reference = tokenizer.decode(target_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
                 generated = model.generate(tokenizer, prompt, max_new_tokens=len(target_ids), temperature=0.0, top_p=None)
@@ -34,12 +28,14 @@ def evaluate_rouge(model, loader, tokenizer, pad_id=0, device=None, max_batches=
     if not preds:
         return 0.0, 0.0, 0
     scores = rouge_metric.compute(
-        predictions=preds, references=refs,
-        rouge_types=["rouge1","rouge2"], use_stemmer=True
+        predictions=preds,
+        references=refs,
+        rouge_types=["rouge1","rouge2"],
+        use_stemmer=True
     )
     return float(scores["rouge1"]), float(scores["rouge2"])
 
-def evaluate(model, loader, pad_id=0):
+def evaluate(model, device, loader, pad_id=0):
     model.to(device)
     model.eval()
     criterion = torch.nn.CrossEntropyLoss(ignore_index=pad_id, reduction="sum")
@@ -64,7 +60,7 @@ def evaluate(model, loader, pad_id=0):
     val_acc = (correct / total) if total > 0 else 0.0
     return val_loss, val_acc
 
-def train_model(model, train_loader, val_loader, tokenizer, epochs=6, lr=1e-3, pad_id=0):
+def train_model(model, device, train_loader, val_loader, tokenizer, epochs=6, lr=1e-3, pad_id=0):
     model.to(device)
     criterion = torch.nn.CrossEntropyLoss(ignore_index=pad_id)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -89,7 +85,7 @@ def train_model(model, train_loader, val_loader, tokenizer, epochs=6, lr=1e-3, p
             total_tokens += n_tok
 
         train_loss = total_loss / max(1, total_tokens)  
-        val_loss, val_acc = evaluate(model, val_loader)
+        val_loss, val_acc = evaluate(model, device, val_loader)
         r1, r2 = evaluate_rouge(model, val_loader, tokenizer, pad_id=pad_id, device=device, max_batches=20)
 
         print(f"Epoch {epoch+1} | Train Loss: {train_loss:.3f} | Val Loss: {val_loss:.3f} | Val Accuracy: {val_acc:.2%} | ROUGE1: {r1:.4f} | ROUGE2: {r2:.4f}")
