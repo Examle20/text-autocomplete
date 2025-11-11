@@ -1,5 +1,5 @@
 import torch
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import evaluate as eval_r
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
